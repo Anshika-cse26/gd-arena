@@ -36,7 +36,11 @@ async function callGemini(prompt) {
     try {
       const response = await ai.models.generateContent({
         model,
-        contents: prompt
+        contents: prompt,
+        config:{
+            maxOutputTokens: 100,
+            thinkingConfig: { thinkingBudget: 0}
+        }
       });
       if (!workingModel) {
         workingModel = model;
