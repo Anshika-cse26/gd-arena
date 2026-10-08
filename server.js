@@ -5,7 +5,7 @@ import { GoogleGenAI } from "@google/genai";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 if (!process.env.GEMINI_API_KEY) {
   console.error("ERROR: GEMINI_API_KEY is missing in .env");
@@ -19,7 +19,44 @@ const ai = new GoogleGenAI({
 app.use(express.json());
 app.use(express.static("public"));
 
-const MODEL = "gemini-2.5-flash";
+// Models are tried in this order. The first one that works is remembered.
+const MODELS = [
+  "gemini-3.8-flash",
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
+  "gemini-2.5-flash"
+];
+let workingModel = null;
+
+async function callGemini(prompt) {
+  const list = workingModel ? [workingModel] : MODELS;
+  let lastError = null;
+
+  for (const model of list) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt
+      });
+      if (!workingModel) {
+        workingModel = model;
+        console.log("WORKING MODEL FOUND:", model);
+      }
+      return response.text.trim();
+    } catch (error) {
+      lastError = error;
+      console.error("----- MODEL FAILED:", model);
+      console.error("Status:", error.status);
+      console.error("Message:", error.message);
+      if (workingModel) {
+        // working model suddenly failed, try the full list next time
+        workingModel = null;
+      }
+    }
+  }
+
+  throw lastError;
+}
 
 const participants = {
   dominator: {
@@ -27,13 +64,11 @@ const participants = {
     personality:
       "You are confident, assertive and competitive. Keep answers short and strong. Challenge weak arguments and try to control the discussion."
   },
-
   data: {
     name: "Data-Driven",
     personality:
       "You are analytical and evidence-focused. Prefer facts, numbers, examples and logical reasoning. Politely challenge unsupported claims."
   },
-
   quiet: {
     name: "Quiet",
     personality:
@@ -67,12 +102,7 @@ Rules:
 - Do not give feedback about the student.
 `;
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: prompt
-  });
-
-  return response.text.trim();
+  return await callGemini(prompt);
 }
 
 // AI participants respond to student's latest statement
@@ -94,29 +124,14 @@ app.post("/api/respond", async (req, res) => {
 
     res.json({
       replies: [
-        {
-          type: "dominator",
-          name: participants.dominator.name,
-          text: replies[0]
-        },
-        {
-          type: "data",
-          name: participants.data.name,
-          text: replies[1]
-        },
-        {
-          type: "quiet",
-          name: participants.quiet.name,
-          text: replies[2]
-        }
+        { type: "dominator", name: participants.dominator.name, text: replies[0] },
+        { type: "data", name: participants.data.name, text: replies[1] },
+        { type: "quiet", name: participants.quiet.name, text: replies[2] }
       ]
     });
   } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      error: "Gemini API request failed."
-    });
+    console.error("/api/respond failed:", error.message);
+    res.status(500).json({ error: "Gemini API request failed." });
   }
 });
 
@@ -165,20 +180,11 @@ Do not invent quotes.
 Keep the whole report concise and suitable for a college student.
 `;
 
-    const response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt
-    });
-
-    res.json({
-      feedback: response.text.trim()
-    });
+    const feedback = await callGemini(prompt);
+    res.json({ feedback });
   } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      error: "Could not generate feedback."
-    });
+    console.error("/api/feedback failed:", error.message);
+    res.status(500).json({ error: "Could not generate feedback." });
   }
 });
 

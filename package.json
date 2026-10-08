@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Practice group discussions with AI participants and get honest feedback",
   "main": "index.js",
-    "scripts": {
+  "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
