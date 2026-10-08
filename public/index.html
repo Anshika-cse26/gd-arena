@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>GD-Arena</title>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <header>
+    <h1>GD-Arena</h1>
+    <p>Practice Group Discussions with AI participants</p>
+  </header>
+
+  <main>
+
+    <!-- Setup -->
+    <section id="setup" class="card">
+
+      <h2>Choose a GD Topic</h2>
+
+      <select id="topic">
+        <option value="Is Artificial Intelligence a threat to jobs?">
+          Is Artificial Intelligence a threat to jobs?
+        </option>
+
+        <option value="Should college education be completely online?">
+          Should college education be completely online?
+        </option>
+
+        <option value="Social media does more harm than good.">
+          Social media does more harm than good.
+        </option>
+
+        <option value="Should students use AI for education?">
+          Should students use AI for education?
+        </option>
+      </select>
+
+      <button id="startBtn">
+        Start GD
+      </button>
+
+    </section>
+
+
+    <!-- GD Area -->
+    <section id="gdArea" class="hidden">
+
+      <div class="topic-bar">
+        <strong>Topic:</strong>
+        <span id="topicText"></span>
+      </div>
+
+      <div class="controls">
+
+        <button id="micBtn">
+          🎙 Start Speaking
+        </button>
+
+        <button id="stopBtn" disabled>
+          Stop
+        </button>
+
+        <button id="feedbackBtn" disabled>
+          Generate Final Feedback
+        </button>
+
+      </div>
+
+
+      <!-- Live transcript -->
+      <div class="card">
+
+        <h2>Your Speech</h2>
+
+        <div id="liveTranscript" class="transcript">
+          Click "Start Speaking" and start talking...
+        </div>
+
+        <div id="status">
+          Microphone off
+        </div>
+
+      </div>
+
+
+      <!-- Participants -->
+      <div class="participants">
+
+        <div class="participant dominator">
+
+          <div class="avatar">D</div>
+
+          <div>
+            <h3>Dominator</h3>
+            <p class="role">Confident & Challenging</p>
+            <p id="dominatorText">
+              Waiting for your point...
+            </p>
+          </div>
+
+        </div>
+
+
+        <div class="participant data">
+
+          <div class="avatar">📊</div>
+
+          <div>
+            <h3>Data-Driven</h3>
+            <p class="role">Facts & Logic</p>
+            <p id="dataText">
+              Waiting for your point...
+            </p>
+          </div>
+
+        </div>
+
+
+        <div class="participant quiet">
+
+          <div class="avatar">Q</div>
+
+          <div>
+            <h3>Quiet</h3>
+            <p class="role">Thoughtful & Concise</p>
+            <p id="quietText">
+              Waiting for your point...
+            </p>
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- Transcript history -->
+      <div class="card">
+
+        <h2>GD Transcript</h2>
+
+        <div id="transcriptHistory">
+          <p class="empty">
+            Your discussion will appear here.
+          </p>
+        </div>
+
+      </div>
+
+
+      <!-- Feedback -->
+      <div id="feedbackSection" class="card hidden">
+
+        <h2>📋 Final Feedback</h2>
+
+        <div id="feedback">
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+
+</body>
+</html>

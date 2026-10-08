@@ -1,0 +1,26 @@
+{
+  "name": "gd-arena",
+  "version": "1.0.0",
+  "description": "Practice group discussions with AI participants and get honest feedback",
+  "main": "index.js",
+    "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Anshika-cse26/gd-arena.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Anshika-cse26/gd-arena/issues"
+  },
+  "homepage": "https://github.com/Anshika-cse26/gd-arena#readme",
+  "dependencies": {
+    "@google/genai": "^2.28.0",
+    "dotenv": "^18.0.6",
+    "express": "^5.2.1"
+  }
+}
