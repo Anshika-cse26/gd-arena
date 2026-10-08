@@ -8,7 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 if (!process.env.GEMINI_API_KEY) {
-  console.error("ERROR: GEMINI_API_KEY is missing in .env");
+  console.error("ERROR: GEMINI_API_KEY is missing");
   process.exit(1);
 }
 
@@ -19,97 +19,81 @@ const ai = new GoogleGenAI({
 app.use(express.json());
 app.use(express.static("public"));
 
-// Models are tried in this order. The first one that works is remembered.
-const MODELS = [
+// Models are tried in this order. If one fails (404 / quota over), the next one is used.
+const MODEL_CANDIDATES = [
   "gemini-3.8-flash",
   "gemini-3.6-flash",
   "gemini-3.5-flash",
-  "gemini-2.5-flash"
+  "gemini-3.5-flash-lite",
+  "gemini-3.1-flash-lite",
+  "gemini-3-flash-preview"
 ];
-let workingModel = null;
 
-async function callGemini(prompt) {
-  const list = workingModel ? [workingModel] : MODELS;
+const blockedUntil = {};
+let lastGoodModel = null;
+
+async function askGemini(prompt, wantJson) {
+  const order = lastGoodModel
+    ? [lastGoodModel, ...MODEL_CANDIDATES.filter((m) => m !== lastGoodModel)]
+    : MODEL_CANDIDATES;
+
   let lastError = null;
 
-  for (const model of list) {
+  for (const model of order) {
+    if (blockedUntil[model] && Date.now() < blockedUntil[model]) {
+      continue;
+    }
+
     try {
       const response = await ai.models.generateContent({
-        model,
+        model: model,
         contents: prompt,
-        config:{
-            maxOutputTokens: 100,
-            thinkingConfig: { thinkingBudget: 0}
-        }
+        config: wantJson ? { responseMimeType: "application/json" } : undefined
       });
-      if (!workingModel) {
-        workingModel = model;
-        console.log("WORKING MODEL FOUND:", model);
+
+      const text = (response.text || "").trim();
+      if (!text) {
+        throw new Error("Empty response");
       }
-      return response.text.trim();
+
+      lastGoodModel = model;
+      console.log("Used model:", model);
+      return text;
     } catch (error) {
       lastError = error;
-      console.error("----- MODEL FAILED:", model);
-      console.error("Status:", error.status);
-      console.error("Message:", error.message);
-      if (workingModel) {
-        // working model suddenly failed, try the full list next time
-        workingModel = null;
+      const status = error.status || error.code;
+      console.log("MODEL FAILED:", model, "status:", status);
+
+      if (status === 429) {
+        blockedUntil[model] = Date.now() + 5 * 60 * 1000;
+      } else if (status === 404) {
+        blockedUntil[model] = Date.now() + 24 * 60 * 60 * 1000;
       }
     }
   }
 
-  throw lastError;
+  throw lastError || new Error("No model available");
 }
 
 const participants = {
   dominator: {
     name: "Dominator",
     personality:
-      "You are confident, assertive and competitive. Keep answers short and strong. Challenge weak arguments and try to control the discussion."
+      "Confident, assertive and competitive. Challenges weak arguments and tries to control the discussion."
   },
   data: {
     name: "Data-Driven",
     personality:
-      "You are analytical and evidence-focused. Prefer facts, numbers, examples and logical reasoning. Politely challenge unsupported claims."
+      "Analytical and evidence-focused. Prefers facts, numbers, examples and logical reasoning. Politely challenges unsupported claims."
   },
   quiet: {
     name: "Quiet",
     personality:
-      "You are calm, thoughtful and usually speak less. Add one useful insight that others may have missed. Do not dominate the discussion."
+      "Calm and thoughtful, speaks less. Adds one useful insight that others may have missed."
   }
 };
 
-async function generateParticipantReply(type, topic, transcript) {
-  const participant = participants[type];
-
-  const prompt = `
-You are participating in a college Group Discussion.
-
-Topic:
-"${topic}"
-
-Your personality:
-${participant.personality}
-
-The student's latest statement is:
-"${transcript}"
-
-Reply as ${participant.name}.
-
-Rules:
-- Respond in 1-3 sentences.
-- Sound like a real student in a GD.
-- Directly react to the student's point.
-- Do not mention that you are an AI.
-- Do not use headings.
-- Do not give feedback about the student.
-`;
-
-  return await callGemini(prompt);
-}
-
-// AI participants respond to student's latest statement
+// All three participants reply in ONE request
 app.post("/api/respond", async (req, res) => {
   try {
     const { topic, transcript } = req.body;
@@ -120,22 +104,58 @@ app.post("/api/respond", async (req, res) => {
       });
     }
 
-    const replies = await Promise.all([
-      generateParticipantReply("dominator", topic, transcript),
-      generateParticipantReply("data", topic, transcript),
-      generateParticipantReply("quiet", topic, transcript)
-    ]);
+    const prompt = `
+You are simulating a college Group Discussion with three AI participants.
+
+Topic: "${topic}"
+
+The student's latest statement:
+"${transcript}"
+
+Write ONE reply for each participant:
+- dominator: ${participants.dominator.personality}
+- data: ${participants.data.personality}
+- quiet: ${participants.quiet.personality}
+
+Rules:
+- Each reply must be 1-2 short sentences (maximum 30 words).
+- Sound like a real college student in a GD.
+- Directly react to the student's point.
+- Do not mention that you are an AI.
+- Do not give feedback about the student.
+
+Return ONLY valid JSON in exactly this format:
+{"dominator":"...","data":"...","quiet":"..."}
+`;
+
+    const raw = await askGemini(prompt, true);
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean);
 
     res.json({
       replies: [
-        { type: "dominator", name: participants.dominator.name, text: replies[0] },
-        { type: "data", name: participants.data.name, text: replies[1] },
-        { type: "quiet", name: participants.quiet.name, text: replies[2] }
+        {
+          type: "dominator",
+          name: participants.dominator.name,
+          text: String(parsed.dominator || "")
+        },
+        {
+          type: "data",
+          name: participants.data.name,
+          text: String(parsed.data || "")
+        },
+        {
+          type: "quiet",
+          name: participants.quiet.name,
+          text: String(parsed.quiet || "")
+        }
       ]
     });
   } catch (error) {
     console.error("/api/respond failed:", error.message);
-    res.status(500).json({ error: "Gemini API request failed." });
+    res.status(500).json({
+      error: "Gemini API request failed."
+    });
   }
 });
 
@@ -184,11 +204,14 @@ Do not invent quotes.
 Keep the whole report concise and suitable for a college student.
 `;
 
-    const feedback = await callGemini(prompt);
-    res.json({ feedback });
+    const text = await askGemini(prompt, false);
+
+    res.json({ feedback: text });
   } catch (error) {
     console.error("/api/feedback failed:", error.message);
-    res.status(500).json({ error: "Could not generate feedback." });
+    res.status(500).json({
+      error: "Could not generate feedback."
+    });
   }
 });
 
